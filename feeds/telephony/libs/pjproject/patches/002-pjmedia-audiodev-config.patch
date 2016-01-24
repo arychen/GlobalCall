@@ -1,0 +1,20 @@
+--- a/pjmedia/include/pjmedia-audiodev/config.h	2013-06-19 14:47:43.000000000 +0800
++++ b/pjmedia/include/pjmedia-audiodev/config.h	2016-01-21 11:16:31.917619233 +0800
+@@ -54,7 +54,7 @@
+        (defined(PJ_SYMBIAN) && PJ_SYMBIAN!=0)
+ #	define PJMEDIA_AUDIO_DEV_HAS_PORTAUDIO	0
+ #   else
+-#	define PJMEDIA_AUDIO_DEV_HAS_PORTAUDIO	1
++#	define PJMEDIA_AUDIO_DEV_HAS_PORTAUDIO	0
+ #   endif
+ #endif
+ 
+@@ -86,7 +86,7 @@
+  * This setting controls whether native ALSA support should be included.
+  */
+ #ifndef PJMEDIA_AUDIO_DEV_HAS_ALSA
+-#   define PJMEDIA_AUDIO_DEV_HAS_ALSA		0
++#   define PJMEDIA_AUDIO_DEV_HAS_ALSA		1
+ #endif
+ 
+ 

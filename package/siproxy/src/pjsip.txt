@@ -1,0 +1,726 @@
+1.  PJMEDIA Audio Device API
+
+	pjsip/pjmedia/src/pjmedia-audiodev
+	sample:
+		alsa_dev.c
+		null_dev.c
+
+
+2. Config 
+
+config_site.h
+
+
+3. SIM Cable
+
+
+4. Work Flow // FIXME
+
+a). SIM_A recv a call  RING输出/ATD就是接听
+b). SIP_A/SIP_B recv a call
+c). SIM_A call other   // No
+d). SIP_B call other
+
+SIM_O : any other SIM.
+
+SIM_A :
+SIP_A :
+
+SIP_B : The SIP APP client in the phone
+
+AT cmd: ATE1     // Enable / Disable echo
+		ATD      // ATD + Phone Num + ;
+		ATA      // Take the phone
+		ATH      // Cut the phone
+		AT+COLP  // 
+		AT+CLIP
+		AT+VTS
+
+
+           SIM/SIP Proxy              APP
+       +------------------+
+SIM_O  |SIM_A<------>SIP_A|  SIP_B(peer endpoint)
+       +------------------+
+
+Precondition:
+
+     1). SIM_A/SIP_A/SIP_B is binding in backend. // FIXME: Name  convention
+     2). If SIP_B call other phone, it's call SIP_A always and send the 
+         phone number with outbound way(MQTT), then SIM_A call the others.
+     3). If SIM_0 call SIM_A, SIP_A will call SIM_B and SIP_A send 
+         the SIM_O's phone number with outbound way(MQTT).
+
+case 1). SIM_0 Call SIM_A
+
+SIM_A recv a call 当有来电时，发起一个SIP呼叫到指定配对的账号。 
+
+    Get RING from SIM_A.
+    	SIP_A call SIP_B  // pjsua_call_make_call() refer to ui_answer_call()
+    	    If SIP_B take the phone, SIP_A send ATD to SIM_A.
+    	    If timer out, SIM_A cut out the call
+
+    	If SIM_B finished the call, SIM_A finished the call to SIM_O.
+    	If SIM_0 finished the call, SIP_A finished the call to SIP_B. 
+
+
+Any Phone
+SIM_O            SIM_A              SIP Alice                 SIP Bob (APP)
+     Call SIM_A
+|----------------->| Get Ring and Num  |                        |
+|                  |------------------>|       INVITE F1        |
+|                  |                   |----------------------->|
+|                  |                   |    180 Ringing F2      |
+|                  |                   |<-----------------------|
+|                  |                   |                        |
+|                  |                   |       200 OK F3        |
+|                  | Send ATA/Get OK   |<-----------------------|
+|                  |<------------------|         ACK F4         |
+|                  |  Bridge Voice     |----------------------->|
+|                  |-------------------|                        |
+|                  |                   |   Both Way RTP Media   |
+|<================>|                   |<======================>|
+|                  |                   |                        |
+|                  |                   |         BYE F5         |
+|                  |                   |<-----------------------|
+|                  |  Send ATH/Get Ok  |                        |
+|                  |<------------------|       200 OK F6        |
+|                  |                   |----------------------->|
+|                  |                   |                        | 
+|<-----------------|                   |                        |
+
+
+case 2). SIP_B Call SIM_O // call back on_incoming_call()
+
+当有指定账号呼入的（当然只有一个账号会呼叫这个SIP），根据传输来的目标呼叫号码命令modem发起呼叫。// Used the modem call the target phone number
+
+	SIP_A take the phone  // Wait SIM_A call SIM_B until SIM_B take the call
+		SIP_A send AT cmd to SIM_A to call SIM_O, then wait SIM_B take the call.
+
+
+SIM_O            SIM_A              SIP Alice                 SIP Bob
+
+|                  |                   |                        |
+|                  |                   |       INVITE F1        |
+|                  | Send ATD          |<-----------------------|
+|  Call SIM_O      |<------------------|    180 Ringing F2      |
+|<-----------------|                   |----------------------->|
+|                  |                   |                        |
+|----------------->| Get OK            |                        |
+|                  |------------------>|       200 OK F3        |
+|                  |                   |----------------------->|
+|                  |                   |         ACK F4         |
+|                  | Bridge Voice      |<-----------------------|
+|                  |-------------------|                        |
+|                  |                   |   Both Way RTP Media   |
+|<================>|                   |<======================>|
+|                  |                   |                        |
+|----------------->| Get No carrier    |                        |
+|                  |------------------>|      BYE F5            |
+|                  |                   |----------------------->|
+|                  |                   |       200 OK F6        |
+|                  |                   |<-----------------------|
+|                  |                   |                        | 
+
+
+
+How to get target number?  // other way (Outbound) MQTT
+
+5. Add new 
+
+pjmedia_coreaudio_factory
+
+6. Add new media support
+
+pjsip/pjsip-apps/src/3rdparty_media_sample/
+
+7. Add user in opensips
+
+opensipsctl add 100001@121.42.52.171 100001
+opensipsctl add 200002@121.42.52.171 200002
+opensipsctl add 300003@121.42.52.171 300003
+opensipsctl add 400004@121.42.52.171 400004
+
+opensipsctl ul
+
+kamctl add bob@123.57.163.9 bob
+kamctl add alice@123.57.163.9 alice
+kamctl add 100001@123.57.163.9 100001
+kamctl add 200002@123.57.163.9 200002
+kamctl add 300003@123.57.163.9 300003
+
+8. cli // telnet protrol
+
+handle_return()
+handle_tab()
+	
+	pj_cli_sess_parse() // CMD from XML file
+
+	pj_cli_sess_exec()  // Exec the CMD from client
+
+9. work thread
+
+1). thread 1
+
+Breakpoint 1, pj_thread_create (pool=0x8b6510, thread_name=0x59c54e "media", proc=0x4a3261 <worker_proc>, arg=0x8b6748, stack_size=0, flags=0, ptr_thread=0x8b72a8)
+    at ../src/pj/os_core_unix.c:57
+
+2). thread 2
+
+Breakpoint 1, pj_thread_create (pool=0x89df30, thread_name=0x586fc0 "pjsua", proc=0x42b508 <worker_thread>, arg=0x0, stack_size=0, flags=0, 
+    ptr_thread=0x823870 <pjsua_var+1456>) at ../src/pj/os_core_unix.c:570
+570	    PJ_ASSERT_RETURN(pool && proc && ptr_thread, PJ_EINVAL);
+
+3). thread 3
+
+Main thread // handle console
+
+4). thread 4 // SIM modem read/write ?
+
+    Main state machine
+    thread read    // Get info, then queue, and send event
+
+    Telnet socket
+
+while(1) {
+	
+}
+
+5). work flow
+
+Init pjsip with telnet support.
+
+store pjsip state/modem state
+
+// State define
+static const char *inv_state_names[] =
+{
+    "NULL",
+    "CALLING",     // SIP_A -> SIP_B
+    "INCOMING",    // SIP_A <- SIP_B
+    "EARLY",       //
+    "CONNECTING",  //
+    "CONFIRMED",   //
+    "DISCONNCTD",  //
+    "TERMINATED",  //
+};
+
+// Event define
+
+// Log with timestamp
+
+register fail -> regitser
+
+a). Init UART/modem     // Send "AT" and wait "OK"
+
+b). Init Telnet socket + fd for UART // Create fd_socket + fd_uart
+
+c). Create a thread for Event queue. (read/queue/send event) // thread or fd? fd_uart
+
+struct node {
+	EVENT_TYPE
+	Value
+};  Queue the nodes.
+Send event.
+
+d). while (get event from Event queue) {  // FIXME: select?
+	EVENT_UART_CALLING:
+
+	EVENT_UART_CALL_CUT:
+
+	EVENT_PJSIP_CALLING:
+
+	EVENT_PJSIP_CALL_CUT:
+
+	TIMER_OUT:
+}
+
+e). timeout handler // Modem and PJSIP will report timer out event, so just wait in read.
+
+Will recv from telnet:
+
+	    PJ_LOG(3,(THIS_FILE, "Call %d state changed to %s", 
+		      call_id,
+		      call_info.state_text.ptr));
+
+f). libtelnet + RS-232 + debug function + string match
+
+Event
+
+Event queue
+
+g). QActive
+
+HSM
+ ^
+ |
+ |
+QActive // init()
+        // dispatch()
+        // Exec thread
+        // event queueCALL
+
+ h). Activemq // mqtt // IM + Register Binding 
+
+ APP get Info binding info
+
+ Board get Info binding info
+
+ Phone number // Get from Server with outer protrol, SIM modem call number
+              //   
+              // Get from SIM, send it to Server. wait peer OK 
+              //    
+
+ External protrol
+
+ i). SIP IM // 
+
+ j). Others
+
+10. MQTT // paho client lib 
+
+a). Using the client (Async mode or Sync mode)
+
+Applications that use the client library typically use a similar structure:
+
+Async mode 
+    Create a client object
+    Set the options to connect to an MQTT server
+    Set up callback functions                           // XXX : Register Callback 1
+    Connect the client to an MQTT server
+    Subscribe to any topics the client needs to receive // Register Callback 2
+    Repeat until finished:
+        Publish any messages the client needs to        // Register Callback 3
+        Handle any incoming messages                    // The callback in Callback 1
+    Disconnect the client
+    Free any memory being used by the client
+
+
+Sync mode
+    Create a client object
+    Set the options to connect to an MQTT server
+    Set up callback functions if multi-threaded (asynchronous mode) operation is being used (see Asynchronous vs synchronous client applications).
+    Subscribe to any topics the client needs to receive
+    Repeat until finished:
+        Publish any messages the client needs to
+        Handle any incoming messages
+    Disconnect the client
+    Free any memory being used by the client
+
+
+The client library supports two modes of operation. These are referred to as 
+synchronous and asynchronous modes. If your application calls MQTTClient_setCallbacks(), 
+this puts the client into asynchronous mode, otherwise it operates in synchronous mode.
+
+In synchronous mode, the client application runs on a single thread. Messages are
+published using the MQTTClient_publish() and MQTTClient_publishMessage() functions. 
+To determine that a QoS1 or QoS2 (see Quality of service) message has been successfully 
+delivered, the application must call the MQTTClient_waitForCompletion() function. 
+An example showing synchronous publication is shown in Synchronous publication example. 
+Receiving messages in synchronous mode uses the MQTTClient_receive() function. Client 
+applicaitons must call either MQTTClient_receive() or MQTTClient_yield() relatively 
+frequently in order to allow processing of acknowledgements and the MQTT "pings" 
+that keep the network connection to the server alive.
+
+In asynchronous mode, the client application runs on several threads. 
+The main program calls functions in the client library to publish and subscribe, 
+just as for the synchronous mode. Processing of handshaking and maintaining 
+the network connection is performed in the background, however. Notifications 
+of status and message reception are provided to the client application using 
+callbacks registered with the library by the call to MQTTClient_setCallbacks() 
+(see MQTTClient_messageArrived(), MQTTClient_connectionLost() and MQTTClient_deliveryComplete()). 
+
+b). Tracing
+
+Runtime tracing is controlled by environment variables.
+
+Tracing is switched on by setting MQTT_C_CLIENT_TRACE. A value of ON, or stdout, 
+prints to stdout, any other value is interpreted as a file name to use.
+
+MQTT_C_CLIENT_TRACE
+    ON or stdout
+    Other as file name
+
+MQTT_C_CLIENT_TRACE_LEVEL
+    ERROR, 
+    PROTOCOL, 
+    MINIMUM, 
+    MEDIUM,
+    MAXIMUM (from least to most verbose).
+
+The variable MQTT_C_CLIENT_TRACE_MAX_LINES limits the number of lines of trace that are output to 
+a file. Two files are used at most, when they are full, the last one is overwritten with the new trace entries. The default size is 1000 lines.
+
+c). Server and Client
+
+// FIXME
+
+mosquitto as server, paho as client
+
+Publish with sync // ./pubsync as sample
+
+Recv with async   // ./subasync as sample
+
+d). Phone Number  // QoS == 2 ? Realtime QoS == 0   // Event Call Number
+
+    Publish phone number
+
+    Subscribe phone number
+
+e). IMS // QoS = 0
+
+f). Peer die event // When connected, define the policy
+
+Last will and Testament + Keepalive
+
+After SIP Bob/Alice connect the MQTT server, publish online message:  // Event Online
+
+Publish  // Retain == 1, Qos == 2
+    Topic:    /SIP X /Status
+    Playload: Online
+
+
+When SIP Bob/Alice connect the MQTT server, the CONNECT used Last will and Testament: // Event Offline
+In Last will and Testament
+Will Flag   == 1
+Will Retain == 1
+Will QoS    == 2
+    Will Topic   : /SIP X /Status
+    Will Message : Offline
+
+g). Configure file deliver 
+
+h). Topic define 
+
+PhoneOther(SIM_O) / Phone(SIM_A) / SIP Alice / SIP Bob
+
+i). SIP Bob call Phone Other(SIM_O)
+
+                                                              SIP Bob publish: (Before INVITE F1)
+                                                                 Topic  : SIP Bob / Calling / PhoneOther
+                                                                 Payload: Phone Number(SIM_O)
+
+                                    If Alice get the Bob publish(Before INVITE F1), publish: 
+                                         Topic  : SIP Alice / Get / PhoneOther
+                                         Payload: Phone Number(SIM_O)
+
+
+SIM_O            SIM_A              SIP Alice                 SIP Bob
+
+|                  |                   |       MQTT Pub Calling |
+|                  |                   |<-----------------------|
+|               ......              ......                      |
+|               ~~~~~~              ~~~~~~                      |
+|                  |                   |       MQTT Pub Get     |
+|                  |                   |----------------------->|
+|                  |                   |                        |
+|                  |                   |       INVITE F1        |
+|                  | Send ATD          |<-----------------------|
+|  Call SIM_O      |<------------------|    180 Ringing F2      |
+|<-----------------|                   |----------------------->|
+|                  |                   |                        |
+|----------------->| Get OK            |                        |
+|                  |------------------>|       200 OK F3        |
+|                  |                   |----------------------->|
+|                  |                   |         ACK F4         |
+|                  | Bridge Voice      |<-----------------------|
+|                  |-------------------|                        |
+|                  |                   |   Both Way RTP Media   |
+|<================>|                   |<======================>|
+|                  |                   |                        |
+|               ......              ......                      |
+|               ~~~~~~              ~~~~~~                      |
+|                  |                   |                        |    
+|----------------->| Get No carrier    |                        |
+|                  |------------------>|      BYE F5            |
+|                  |                   |----------------------->|
+|                  |                   |       200 OK F6        |
+|                  |                   |<-----------------------|
+|                  |                   |                        | 
+
+// TODO
+ After Send ATD, Bridge Voice  and Send 200 Ok ?
+
+ After receive MQTT Pub ? No ?
+
+
+j). Phone Other call Phone SIM_A
+
+                                    SIP Alice publish: (Before INVITE F1)
+                                        Topic  : SIP Alice / Called / PhoneOther
+                                        Payload: Phone Number(SIM_O)
+
+                                                              If Bob get the Alice publish(Before INVITE F1), publish: 
+                                                                 Topic  : SIP Bob / Get / PhoneOther
+                                                                 Payload: Phone Number(SIM_O)
+
+
+SIM_O            SIM_A              SIP Alice                 SIP Bob (APP)
+     Call SIM_A
+|----------------->| Get Ring and Num  |                        |
+|                  |------------------>|                        |
+|                  |                   |       MQTT Pub Called  |
+|                  |                   |----------------------->|
+|               ......              ......                      |
+|               ~~~~~~              ~~~~~~                      |
+|                  |                   |       MQTT Pub Get     |
+|                  |                   |<-----------------------|
+|                  |                   |                        |
+|                  |                   |      INVITE F1         |
+|                  |                   |----------------------->|
+|                  |                   |    180 Ringing F2      |
+|                  |                   |<-----------------------|
+|                  |                   |                        |
+|                  |                   |       200 OK F3        |
+|                  | Send ATA/Get OK   |<-----------------------|
+|                  |<------------------|         ACK F4         |
+|                  |  Bridge Voice     |----------------------->|
+|                  |-------------------|                        |
+|                  |                   |   Both Way RTP Media   |
+|<================>|                   |<======================>|
+|                  |                   |                        |
+|                  |                   |                        |
+|               ......              ......                      |
+|               ~~~~~~              ~~~~~~                      |
+|                  |                   |                        |    
+|                  |                   |         BYE F5         |
+|                  |                   |<-----------------------|
+|                  |  Send ATH/Get Ok  |                        |
+|                  |<------------------|       200 OK F6        |
+|                  |                   |----------------------->|
+|                  |                   |                        | 
+|<-----------------|                   |                        |
+
+
+// TODO
+Bridge Voice to After 180 Ringing ?
+
+AT+CPIN?
++CPIN: READY
+
+OK
+AT+CSQ
++CSQ: 22,0
+
+OK
+AT+COPS
+ERROR
+AT+COPS?
++COPS: 0,0,"CHINA MOBILE"
+
+OK
+AT+CNUM
+OK
+ATD13761124413;
+BUSY
+AT+CNMI
+ERROR
+AT+CNMI=2,1
+OK
+AT+CPMS?
++CPMS: "SM",53,60,"SM",53,60,"SM",53,60
+
+OK
+AT+CMGD=1
+OK
+AT+CPMS?
++CPMS: "SM",52,60,"SM",52,60,"SM",52,60
+
+OK
+AT+CPMS?
++CPMS: "SM",52,60,"SM",52,60,"SM",52,60
+
+OK
+AT+CMGD=1
+OK
+AT+CPMS?
++CPMS: "SM",52,60,"SM",52,60,"SM",52,60
+
+OK
+AT+CMGD=1
+OK
+AT+CMGR=1
+OK
+AT+CPMS?
++CPMS: "SM",52,60,"SM",52,60,"SM",52,60
+
+OK
+
++CMTI: "SM",1
+AT+CMGD=1
+OK
+AT+CMGR=1
+OK
+
++CMTI: "SM",1 // Receive the SMS
+
+AT+CMGR=1     // Get SMS
++CMGR: 0,"",26
+0891683108200105F0240D91683167114214F3000851805261946323066D4B8BD50032
+
+OK
+
++CMTI: "SM",54 //
+
+AT+CMGR=54
++CMGR: 0,"",24
+0891683108200105F0240D91683167114214F300005180526115142304D1F8FD0E
+
+OK
+
+AT+CMGF=0
+AT+CSCS="UCS2"
+OK
+
+AT+CMGD=1,4 // Delete All message
+OK
+
+AT+CPMS?
++CPMS: "SM",0,60,"SM",0,60,"SM",0,60
+
+OK
+
+// Receive a SMS
+
++CMTI: "SM",1 // 1). A SMS arrive, get the Index
+
+AT+CMGR=1     // 2). Get the SMS with the Index
+
++CMGR: 0,"",32
+0891683108200105F0240D91683167114214F30008518062411421230C00410062006300648D75519B
+
+OK
+
+              // 2.b). Send SMS with MQTT
+
+AT+CMGD=1,4   // 3). Delete the SMS from SIM card
+OK
+
+// Delete MMS
++CMTI: "SM",1,"MMS PUSH"
+AT+CMGD=1,4 
+OK
+
+
+// Send a SMS
+
+// 1). A SMS arrive from MQTT
+
+// 2). Send SMS with SIM card  AT+CMGS=
+
+
+AT+CMGF=0 // Set SMS format with PDU mode
+
+0891683108 200105F011 000D916831 67114214F3 0008AA0C6D 4B8BD54E00 4E0B800C5D F2
+
+0891683108 200105F011 000D916851 52002371F9 0008AA0C6D 4B8BD54E00 4E0B800C5D F2
+
+AT+CSCA="+8613800411500"
+
+08 // SMSC Len
+91 // SMSC Type
+683108200105F0 // SMSC Number: 8613800210500
+24 // 
+0D
+91 //
+683167114214F3 // Src Number:  8613761124413
+00 // Protrol 
+08 // USC2 
+51 // 
+80 // Number Char * 2 
+7261408323104E2D6587006300670068006600690069
+
+// PDU Mode
+T+CMGF=0
+AT+CSCS=?
+AT+CSCS="UCS2"
+AT+CMGS=23
+0011000B913167114214F30000AA0AE8329BFD4697D9EC37 Ctrl+Z
+
+0011000B916407281553F80000AA0AE8329BFD4697D9EC37
+
+0011000B913167114214F30000AA0AE8329BFD4697D9EC37
+
+Decoder ->
+
+SMSC#
+Receipient:+13761124413
+Validity:Rel 4d 
+TP_PID:00
+TP_DCS:00
+TP_DCS-popis:Uncompressed Text
+No class
+Alphabet:Default
+
+hellohello
+Length:10
+
+          6407281553F8
+          3167114214F3
+                0011000B913167114214F30000AA0AE8329BFD4697D9EC37
+                0001000B913167114214F300081400680065006C006C006F00680065006C006C006F
+                0001000B913167114214F300081400680065006C006C006F00680065006C006C006F
+                0001000B913167114214F300080E007400650073007400206D4B8BD5
+0891683108200105F001000B913167114214F300081400680065006C006C006F00680065006C006C006F
+
+0891683108200105F0240D91683167114214F30008519080012112230E007400650073007400206D4B8BD5..
+
+LD CSCA
+002B0038003600310033003000310030003300310034003500300030
+002B0038003600310033003800300030003500310032003500300030
+
+
+// PDU Mode PDU = SCA + TPDU
+//                SCA = 00 // Used default SCA (from the SIM card)
+//                TPDU= 11 00 0B 91 3167114214F3 00 00AA0AE8329BFD4697D9EC37
+//                      11 //       13761124413F
+//                         00
+//                            0B // Address Len 8+4+2 = 14
+//                               91 // 
+
+T+CMGF=0
+AT+CSCS=?
+AT+CSCS="UCS2"
+AT+CMGS=23
+0011000B913167114214F30000AA0AE8329BFD4697D9EC37 Ctrl+Z
+
+0011000B913167114214F //30000AA0AE8329BFD4697D9EC37
+0001000B913167114214F //30008001400680065006C006C006F00680065006C006C006F
+
+// TEXT Mode Send TEXT SMS
+AT+CMGF=1
+AT+CSCS=?
+AT+CSCS="GSM"
+AT+CMGS="+8613761124413"
+
+AT+CSMP?
+AT+CSMP=17,167,0,16 // LD
+AT+CSMP=17,167,0,0  // ME
+
+AT+CMGS="+8613761124413"
+
+0011000B91683167114214F //30000AA02E834
+
+0001000B913167114214F30008000400680069
+
+0011000B913167114214F30008AA0400680069
+
+0011000B913167114214F30008001400680065006C006C006F00680065006C006C006F
+
+0011000B913167114214F30008AA1400680065006C006C006F00680065006C006C006F
+0001000B913167114214F30008001400680065006C006C006F00680065006C006C006F
+
+
+sudo /etc/init.d/mosquitto start
+
+pj_ice_strans_init_ice()
+
+pj_ice_sess_create_check_list()
+
+
+(gdb) p ice->lcand_cnt
+$14 = 8
+(gdb) p ice->rcand_cnt
+$15 = 10
+
+<global>[304]                  #define PJ_ICE_MAX_CHECKS 32
+
