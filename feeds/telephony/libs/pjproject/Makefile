@@ -101,7 +101,6 @@ CONFIGURE_ARGS += \
 	--disable-oss \
 	--enable-sound \
 	--with-external-srtp="$(STAGING_DIR)/usr" \
-	--with-silk="/home/cld/openwrt/SWT/SILK_SDK_SRC_MIPS_v1.0.9" \
 	--without-external-gsm \
 	--disable-small-filter \
 	--disable-large-filter \
@@ -117,6 +116,8 @@ CONFIGURE_ARGS += \
 	--disable-sdl \
 	--disable-ffmpeg \
 	--disable-v4l2
+
+#--with-silk="/home/cld/openwrt/SWT/SILK_SDK_SRC_MIPS_v1.0.9" \
 
 TARGET_LDFLAGS+=-lc $(LIBGCC) -lm
 TARGET_CFLAGS+=$(EXTRA_CFLAGS) $(TARGET_CPPFLAGS) $(EXTRA_CPPFLAGS)
