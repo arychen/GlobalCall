@@ -1,6 +1,6 @@
 SRCS := main.c rs232.c telnet.c match.c queue.c
 PROG := siproxy
-CC   := ~/openwrt/SWT/baseline1/staging_dir/toolchain-mipsel_24kec+dsp_gcc-4.8-linaro_uClibc-0.9.33.2/bin/mipsel-openwrt-linux-gcc
+#CC   := ~/openwrt/SWT/baseline1/staging_dir/toolchain-mipsel_24kec+dsp_gcc-4.8-linaro_uClibc-0.9.33.2/bin/mipsel-openwrt-linux-gcc
 CURDIR := $(shell pwd)
 
 LIBS = paho-mqtt3a

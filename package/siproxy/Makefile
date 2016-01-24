@@ -30,7 +30,7 @@ define Build/Prepare
 endef
 
 define Build/Compile
-	$(MAKE) -C "$(PKG_BUILD_DIR)"
+	$(MAKE) -C "$(PKG_BUILD_DIR)" CC="$(TARGET_CROSS)"gcc
 endef
 
 define Package/Siproxy/install

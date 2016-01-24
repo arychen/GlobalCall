@@ -97,7 +97,7 @@ MQTTLIB_A = paho-mqtt3a
 MQTTLIB_AS = paho-mqtt3as
 
 #CC ?= gcc
-CC :=~/openwrt/SWT/baseline1/staging_dir/toolchain-mipsel_24kec+dsp_gcc-4.8-linaro_uClibc-0.9.33.2/bin/mipsel-openwrt-linux-gcc
+#CC :=~/openwrt/SWT/baseline1/staging_dir/toolchain-mipsel_24kec+dsp_gcc-4.8-linaro_uClibc-0.9.33.2/bin/mipsel-openwrt-linux-gcc
 
 ifndef INSTALL
 INSTALL = install
