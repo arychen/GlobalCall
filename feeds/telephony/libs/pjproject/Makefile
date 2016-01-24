@@ -39,12 +39,14 @@ define Package/pjproject/install/lib
 	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/lib/$(2).so* $(1)/usr/lib/
 	$(INSTALL_BIN) $(BUILD_DIR)/alsa-lib-1.0.28/ipkg-ramips_24kec/alsa-lib/usr/lib/libasound.so.2 $(PKG_INSTALL_DIR)/usr/lib/
 	$(INSTALL_BIN) $(BUILD_DIR)/alsa-lib-1.0.28/ipkg-ramips_24kec/alsa-lib/usr/lib/libasound.so.2 $(1)/usr/lib/
-	$(INSTALL_BIN) $(BUILD_DIR)/root-ramips/lib/librt.so.0 $(PKG_INSTALL_DIR)/usr/lib/
-	$(INSTALL_BIN) $(BUILD_DIR)/root-ramips/lib/librt.so.0 $(1)/usr/lib/
-	$(INSTALL_BIN) $(BUILD_DIR)/root-ramips/lib/libpthread.so.0 $(PKG_INSTALL_DIR)/usr/lib/
-	$(INSTALL_BIN) $(BUILD_DIR)/root-ramips/lib/libpthread.so.0 $(1)/usr/lib/
+	$(INSTALL_BIN) $(STAGING_DIR)/root-ramips/lib/librt.so.0 $(PKG_INSTALL_DIR)/usr/lib/
+	$(INSTALL_BIN) $(STAGING_DIR)/root-ramips/lib/librt.so.0 $(1)/usr/lib/
+	$(INSTALL_BIN) $(STAGING_DIR)/root-ramips/lib/libpthread.so.0 $(PKG_INSTALL_DIR)/usr/lib/
+	$(INSTALL_BIN) $(STAGING_DIR)/root-ramips/lib/libpthread.so.0 $(1)/usr/lib/
 	$(INSTALL_BIN) $(BUILD_DIR)/pjproject-2.4/third_party/lib/libportaudio.so $(PKG_INSTALL_DIR)/usr/lib/
 	$(INSTALL_BIN) $(BUILD_DIR)/pjproject-2.4/third_party/lib/libportaudio.so $(1)/usr/lib/
+	$(INSTALL_BIN) $(BUILD_DIR)/pjproject-2.4/third_party/lib/libresample.so $(PKG_INSTALL_DIR)/usr/lib/
+	$(INSTALL_BIN) $(BUILD_DIR)/pjproject-2.4/third_party/lib/libresample.so $(1)/usr/lib/
 	$(INSTALL_BIN) $(BUILD_DIR)/pjproject-2.4/pjmedia/lib/libpjmedia-audiodev.so $(PKG_INSTALL_DIR)/usr/lib/
 	$(INSTALL_BIN) $(BUILD_DIR)/pjproject-2.4/pjmedia/lib/libpjmedia-audiodev.so $(1)/usr/lib/
 	$(INSTALL_BIN) $(BUILD_DIR)/pjproject-2.4/pjmedia/lib/libpjmedia-videodev.so $(PKG_INSTALL_DIR)/usr/lib/
