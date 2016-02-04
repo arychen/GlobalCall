@@ -111,6 +111,8 @@ enum EVENT {
 	EVT_MODEM_OK,          /* OK */  
 	EVT_MODEM_ERROR,       /* ERROR */   
 	EVT_MODEM_SMS,         /* +CMTI: "SM",xxx */
+
+	EVT_MODEM_CONN,		   /* ^CONN:  QW200 special */
 	
 	EVT_MODEM_MAX,         /* last modem event */
 
@@ -156,9 +158,15 @@ struct event_map modem_events[] = {
 		.regex = "+COLP",
 	},
 
+	/* ^CONN:   QW200 */
+	{
+		.event = EVT_MODEM_CONN,
+		.regex = "CONN:",
+	},
+
 	{
 		.event = EVT_MODEM_CLIP,
-		.regex = "+CLIP",
+		.regex = "+CLIP:",
 	},
 
 	{
@@ -357,10 +365,7 @@ static int modem_make_call(int uart, char *num)
 {
 	char cmd[128] = {0};
 	snprintf(cmd, sizeof(cmd), "ATD%s\r\n", num);
-	modem_cmd(uart, cmd);
 
-	memset(cmd, 0x00, 128);
-	snprintf(cmd, sizeof(cmd), "AT+SPCM=1\r\n");
 	return modem_cmd(uart, cmd);
 }
 
@@ -407,7 +412,6 @@ void modem_event_sms_queue(char *buf, int size);
 static void modem_event_queue(char *buf, int size)
 {
 	enum EVENT event = EVT_NONE;
-
 	event = find_event(buf, size, modem_events, NELEMS(modem_events));
 	if (event != EVT_NONE) {
 		if (event == EVT_MODEM_SMS) {
@@ -422,7 +426,7 @@ static void modem_event_queue(char *buf, int size)
 		}
 		evt->event = event;
 		snprintf(evt->val, sizeof(evt->val), "%s", buf);
-		
+	
 		queue_add(&events_queue, evt, evt->event);
 
 		return;
@@ -432,7 +436,6 @@ static void modem_event_queue(char *buf, int size)
 static void sip_event_queue(char *buf, int size)
 {
 	enum EVENT event = EVT_NONE;
-
 	event = find_event(buf, size, sip_events, NELEMS(sip_events));
 	if (event != EVT_NONE) {
 		struct evt *evt = malloc(sizeof(*evt));
@@ -442,7 +445,6 @@ static void sip_event_queue(char *buf, int size)
 		}
 		evt->event = event;
 		snprintf(evt->val, sizeof(evt->val), "%s", buf);
-
 		queue_add(&events_queue, evt, evt->event);
 	}
 }
@@ -460,7 +462,7 @@ static void mqtt_event_queue(char *topic, char *playload, int palyloadlen)
 		}
 		evt->event = event;		
 		snprintf(evt->val, palyloadlen+1, "%s", playload);
-		
+
 		queue_add(&events_queue, evt, evt->event);
 	}
 }
@@ -517,6 +519,7 @@ static void sip_make_call(char *peer)
 static void sip_answer_call()
 {
 	char cmd[256] = {0};
+
 	snprintf(cmd, sizeof(cmd), "call answer 200\r\n");
 	telnet_input(cmd, strlen(cmd));
 }
@@ -524,6 +527,7 @@ static void sip_answer_call()
 static void sip_hangup_call()
 {
 	char cmd[256] = {0};
+
 	snprintf(cmd, sizeof(cmd), "hA\r\n");
 	telnet_input(cmd, strlen(cmd));
 }
@@ -611,24 +615,18 @@ static void _send(int sock, const char *buffer, size_t size)
 static void sip_event(telnet_t *telnet, telnet_event_t *ev,
 		void *user_data)
 {
-	char buf[512];
-	
-	char delim[] = "\n";
-	char *token = NULL;
-	char *str = NULL;
-
 	int sock = *(int*)user_data;
-
-	fflush(stdout);
 
 	switch (ev->type) {
 	/* data received */
 	case TELNET_EV_DATA:
-		//LOG("S:%.*s\n", (int)ev->data.size, ev->data.buffer);
 		/* XXX: get sip event */
-		//fflush(stdout);
-		str = (char *)ev->data.buffer;
-
+		fflush(stdout);
+		char delim[] = "\n";
+		char *token = NULL;
+		char *str = (char *)ev->data.buffer;
+		//modify set the '\0' to the telnet buffer
+		str[((int)ev->data.size)] = '\0';
 
 		/* break the str with newline, then map it to sip event */
 		for (token = strtok(str, delim); token; token = strtok(NULL, delim)) {
@@ -1178,6 +1176,7 @@ void state_init(struct evt *evt)
 		break;
 		
 	case EVT_MODEM_COLP:
+	case EVT_MODEM_CONN:
 		/* do nothing */
 		break;
 		
@@ -1251,6 +1250,7 @@ void state_incoming(struct evt *evt)
 		break;
 		
 	case EVT_MODEM_COLP:
+	case EVT_MODEM_CONN:
 		if (siproxy.init_dir == INIT_FROM_SIP) {
 			siproxy.modem_state = STATE_CONFIRMED;
 			
@@ -1301,7 +1301,7 @@ void state_incoming(struct evt *evt)
 			 * so the modem tone will pass through to the APP, 
 			 * and the APP get the modem feedback from this time.
 			 */
-			LOG("make call %s", siproxy.sim_num);
+			
 			modem_make_call(siproxy.uart_fd, siproxy.sim_num);
 			siproxy.modem_state = STATE_CALLING;
 		}
@@ -1352,6 +1352,7 @@ void state_calling(struct evt *evt)
 		break;
 		
 	case EVT_MODEM_COLP:
+	case EVT_MODEM_CONN:
 		break;
 		
 	case EVT_MODEM_NO_CARRIER:
@@ -1408,6 +1409,7 @@ void state_early(struct evt *evt)
 		break;
 		
 	case EVT_MODEM_COLP:
+	case EVT_MODEM_CONN:
 		break;
 		
 	case EVT_MODEM_NO_CARRIER:
@@ -1464,6 +1466,7 @@ void state_connecting(struct evt *evt)
 		break;
 		
 	case EVT_MODEM_COLP:
+	case EVT_MODEM_CONN:
 		break;
 		
 	case EVT_MODEM_NO_CARRIER:
@@ -1520,6 +1523,7 @@ void state_confirmed(struct evt *evt)
 		break;
 		
 	case EVT_MODEM_COLP:
+	case EVT_MODEM_CONN:
 		break;
 		
 	case EVT_MODEM_NO_CARRIER:
@@ -1592,6 +1596,7 @@ void state_disconnctd(struct evt *evt)
 		break;
 		
 	case EVT_MODEM_COLP:
+	case EVT_MODEM_CONN:
 		break;
 		
 	case EVT_MODEM_NO_CARRIER:
@@ -1648,6 +1653,7 @@ void state_terminated(struct evt *evt)
 		break;
 		
 	case EVT_MODEM_COLP:
+	case EVT_MODEM_CONN:
 		break;
 		
 	case EVT_MODEM_NO_CARRIER:
@@ -1704,6 +1710,7 @@ void state_unknow(struct evt *evt)
 		break;
 		
 	case EVT_MODEM_COLP:
+	case EVT_MODEM_CONN:
 		break;
 		
 	case EVT_MODEM_NO_CARRIER:
