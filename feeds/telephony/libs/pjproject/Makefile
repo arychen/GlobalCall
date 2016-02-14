@@ -102,6 +102,7 @@ CONFIGURE_ARGS += \
 	--disable-ssl \
 	--disable-oss \
 	--enable-sound \
+	--with-silk="$(TOPDIR)/package/feeds/telephony/pjproject" \
 	--with-external-srtp="$(STAGING_DIR)/usr" \
 	--without-external-gsm \
 	--disable-small-filter \
