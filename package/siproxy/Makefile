@@ -34,6 +34,8 @@ define Build/Compile
 endef
 
 define Package/Siproxy/install
+	$(INSTALL_DIR) $(1)/etc/init.d
+	$(INSTALL_BIN) ./src/etc/siproxy.init $(1)/etc/init.d/siproxy
 	$(INSTALL_DIR) $(1)/bin
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/siproxy $(1)/bin/
 	$(INSTALL_DIR) $(1)/lib

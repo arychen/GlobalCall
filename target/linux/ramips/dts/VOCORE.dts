@@ -162,17 +162,18 @@
 		};
 	};
 
+	
 	gpio-leds {
 		compatible = "gpio-leds";
 		status {
 			/* UARTF_RXD */
 			label = "vocore:green:status";
-			gpios = <&gpio0 10 0>;
+			gpios = <&gpio1 0 0>;
 		};
 		eth {
 			/* UARTF_DTR_N */
 			label = "vocore:orange:eth";
-			gpios = <&gpio0 11 0>;
+			gpios = <&gpio0 1 0>;
 		};
 	};
 };

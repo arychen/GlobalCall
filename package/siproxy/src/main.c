@@ -25,39 +25,50 @@
 #include "rs232.h"
 #include "match.h"
 #include "queue.h"
+#include "config.h"
 #include "MQTTAsync.h"
 
+#include "http_util.h"
 
-//#define ADDRESS     "tcp://121.42.52.171:1883"
-#define ADDRESS     "tcp://121.42.52.171:532"
 
-#define CLIENTID    "100001Alice"
-#define PEERID      "200002Bob"
+//#define CLIENTID    "100001Alice"
+//#define PEERID      "200002Bob"
 
 /* Pub self/ Sub peer topic status */
-#define TOPIC_STATUS       "/"CLIENTID"/Status"
-#define PEERID_STATUS      "/"PEERID"/Status"
+/* TOPIC_STATUS       "/"CLIENTID"/Status"  */
+static char mqtt_topic_clientid_status[128];
+/* PEERID_STATUS      "/"PEERID"/Status" */
+static char mqtt_topic_peerid_status[128];
 
 #define ONLINE             "Online"
 #define OFFLINE            "Offline"
 
 /* Sub: topic phone number Bob -> Alice, then ACK, 
  * Bob Pub, Alice Sub, then Alice ACK  */
-#define TOPIC_BOB_CALLING  "/"PEERID"/Calling/PhoneOther"
-#define TOPIC_BOB_ACK      "/"CLIENTID"/Get/PhoneOther"
+ 
+/* TOPIC_BOB_CALLING  "/"PEERID"/Calling/PhoneOther" */
+static char mqtt_topic_peerid_calling[128];
+/* TOPIC_BOB_ACK      "/"CLIENTID"/Get/PhoneOther" */
+static char mqtt_topic_clientid_ack[128];
 
 /* Pub: topic phone number Bob <- Alice, then ACK,
    Alice Pub, Bob Sub, then Bob ACK */
-#define TOPIC_ALICE_CALLED "/"CLIENTID"/Called/PhoneOther"
-#define TOPIC_ALICE_ACK    "/"PEERID"Get/PhoneOther"
+
+/* TOPIC_ALICE_CALLED "/"CLIENTID"/Called/PhoneOther" */
+static char mqtt_topic_clientid_called[128];
+/* TOPIC_ALICE_ACK    "/"PEERID"Get/PhoneOther" */
+static char mqtt_topic_peerid_ack[128];
 
 /* Pub self/ Sub peer topic SMS */
-#define TOPIC_SMS       "/"CLIENTID"/SMS"
-#define PEERID_SMS      "/"PEERID"/SMS"
+/* TOPIC_SMS       "/"CLIENTID"/SMS" */
+static char mqtt_topic_clientid_sms[128];
+/* PEERID_SMS      "/"PEERID"/SMS" */
+static char mqtt_topic_peerid_sms[128];
 
 /* Pub the modem status when APP init the session */
 /* Pub: topic modem status Bob <- Alice after Alice ACK the sip session */
-#define TOPIC_ALICE_MODEM "/"CLIENTID"/Modem/Status"
+/* TOPIC_ALICE_MODEM "/"CLIENTID"/Modem/Status" */
+static char mqtt_topic_clientid_modem_status[128];
 
 #define MODEM_CALL_OK "Ok"
 
@@ -235,17 +246,17 @@ struct event_map sip_events[] = {
 struct event_map mqtt_events[] = {
 	{
 		.event = EVT_MQTT_CALLING,
-		.regex = TOPIC_BOB_CALLING,
+		.regex = {0}, //mqtt_topic_peerid_calling,
 	},
 
 	{
 		.event = EVT_MQTT_STATUS,
-		.regex = PEERID_STATUS,
+		.regex = {0}, //mqtt_topic_peerid_status,
 	},
 	
 	{
 		.event = EVT_MQTT_SMS,
-		.regex = PEERID_SMS,
+		.regex = {0}, //mqtt_topic_peerid_sms,
 	},
 };
 
@@ -691,7 +702,7 @@ MQTTAsync_willOptions willOptions = MQTTAsync_willOptions_initializer;
 
 static void addWillOptions(MQTTAsync_connectOptions *connectOptions) 
 {
-	willOptions.topicName = TOPIC_STATUS;
+	willOptions.topicName = mqtt_topic_clientid_status;
 	willOptions.message = OFFLINE;
 	willOptions.retained = 1;
 	willOptions.qos = 2;
@@ -789,7 +800,7 @@ void onConnect(void *context, MQTTAsync_successData *response)
 	pubmsg.retained = 1;
 	deliveredtoken = 0;
 
-	if ((rc = MQTTAsync_sendMessage(client, TOPIC_STATUS, 
+	if ((rc = MQTTAsync_sendMessage(client, mqtt_topic_clientid_status, 
 					&pubmsg, &opts)) != MQTTASYNC_SUCCESS) {
 		LOG("M:failed to start sendMessage, return code %d\n", rc);
  		exit(-1);	
@@ -797,12 +808,12 @@ void onConnect(void *context, MQTTAsync_successData *response)
 
 	/* subcribing to status topic */
 	MQTTAsync_responseOptions substat_opts = MQTTAsync_responseOptions_initializer;
-	LOG("M:sub to topic %s for client %s using QoS %d\n", PEERID_STATUS, CLIENTID, QOS);
+	LOG("M:sub to topic %s for client %s using QoS %d\n", mqtt_topic_peerid_status, mosquitto_client_topic, QOS);
 	substat_opts.onSuccess = onSubscribe;
 	substat_opts.onFailure = onSubscribeFailure;
 	substat_opts.context = client;
 
-	if ((rc = MQTTAsync_subscribe(client, PEERID_STATUS, QOS, 
+	if ((rc = MQTTAsync_subscribe(client, mqtt_topic_peerid_status, QOS, 
 				      &substat_opts)) != MQTTASYNC_SUCCESS) {
 		LOG("M:failed to start subscribe, return code %d\n", rc);
 		exit(-1);	
@@ -810,12 +821,12 @@ void onConnect(void *context, MQTTAsync_successData *response)
 
 	/* subcribing to phone number topic */
 	MQTTAsync_responseOptions subphone_opts = MQTTAsync_responseOptions_initializer;
-	LOG("M:sub to topic %s for client %s using QoS %d\n", TOPIC_BOB_CALLING, CLIENTID, QOS);
+	LOG("M:sub to topic %s for client %s using QoS %d\n", mqtt_topic_peerid_calling, mosquitto_client_topic, QOS);
 	subphone_opts.onSuccess = onSubscribe;
 	subphone_opts.onFailure = onSubscribeFailure;
 	subphone_opts.context = client;
 
-	if ((rc = MQTTAsync_subscribe(client, TOPIC_BOB_CALLING, 
+	if ((rc = MQTTAsync_subscribe(client, mqtt_topic_peerid_calling, 
 				      QOS, &subphone_opts)) != MQTTASYNC_SUCCESS) {
 		LOG("M:failed to start subscribe, return code %d\n", rc);
 		exit(-1);	
@@ -823,12 +834,12 @@ void onConnect(void *context, MQTTAsync_successData *response)
 
 	/* subcribing to SMS topic */
 	MQTTAsync_responseOptions subsms_opts = MQTTAsync_responseOptions_initializer;
-	LOG("M:sub to topic %s for client %s using QoS %d\n", PEERID_SMS, CLIENTID, QOS);
+	LOG("M:sub to topic %s for client %s using QoS %d\n", mqtt_topic_peerid_sms, mosquitto_client_topic, QOS);
 	subsms_opts.onSuccess = onSubscribe;
 	subsms_opts.onFailure = onSubscribeFailure;
 	subsms_opts.context = client;
 
-	if ((rc = MQTTAsync_subscribe(client, PEERID_SMS, 
+	if ((rc = MQTTAsync_subscribe(client, mqtt_topic_peerid_sms, 
 				      QOS, &subsms_opts)) != MQTTASYNC_SUCCESS) {
 		LOG("M:failed to start subscribe, return code %d\n", rc);
 		exit(-1);	
@@ -875,7 +886,7 @@ int mqtt_sub(char *topicName, int qos)
 	int rc;
 
 	LOG("M:subscribing to topic %s for client %s using QoS%d\n\n", 
-	       topicName, CLIENTID, qos);
+	       topicName, mosquitto_client_topic, qos);
 	opts.onSuccess = onSubscribe;
 	opts.onFailure = onSubscribeFailure;
 	opts.context = client;
@@ -891,10 +902,50 @@ int mqtt_sub(char *topicName, int qos)
 
 int mqtt_init()
 {
+	char mosquitto_addr_str[72];
+
 	MQTTAsync_connectOptions conn_opts = MQTTAsync_connectOptions_initializer;
 	int rc;
 
-	MQTTAsync_create(&client, ADDRESS, CLIENTID, MQTTCLIENT_PERSISTENCE_NONE, NULL);
+	//initial topic string
+	memset(mqtt_topic_clientid_status, 0x00, sizeof(mqtt_topic_clientid_status));
+	memset(mqtt_topic_peerid_status, 0x00, sizeof(mqtt_topic_peerid_status));
+	memset(mqtt_topic_peerid_calling, 0x00, sizeof(mqtt_topic_peerid_calling));
+	memset(mqtt_topic_clientid_ack, 0x00, sizeof(mqtt_topic_clientid_ack));
+	memset(mqtt_topic_clientid_called, 0x00, sizeof(mqtt_topic_clientid_called));
+	memset(mqtt_topic_peerid_ack, 0x00, sizeof(mqtt_topic_peerid_ack));
+	memset(mqtt_topic_clientid_sms, 0x00, sizeof(mqtt_topic_clientid_sms));
+	memset(mqtt_topic_peerid_sms, 0x00, sizeof(mqtt_topic_peerid_sms));
+	memset(mqtt_topic_clientid_modem_status, 0x00, sizeof(mqtt_topic_clientid_modem_status));
+
+	sprintf(mqtt_topic_clientid_status, "/%s/Status", mosquitto_client_topic);
+	sprintf(mqtt_topic_peerid_status, "/%s/Status", mosquitto_peer_topic);
+	sprintf(mqtt_topic_peerid_calling, "/%s/Calling/PhoneOther", mosquitto_peer_topic);
+	sprintf(mqtt_topic_clientid_ack, "/%s/Get/PhoneOther", mosquitto_client_topic);
+	sprintf(mqtt_topic_clientid_called, "/%s/Called/PhoneOther", mosquitto_client_topic);
+	sprintf(mqtt_topic_peerid_ack, "/%s/Get/PhoneOther", mosquitto_peer_topic);
+	sprintf(mqtt_topic_clientid_sms, "/%s/SMS", mosquitto_client_topic);
+	sprintf(mqtt_topic_peerid_sms, "/%s/SMS", mosquitto_peer_topic);
+	sprintf(mqtt_topic_clientid_modem_status, "/%s/Modem/Status", mosquitto_client_topic);
+
+	//initial struct
+	memset(mqtt_events[0].regex, 0x00, sizeof(mqtt_events[0].regex));
+	memset(mqtt_events[1].regex, 0x00, sizeof(mqtt_events[1].regex));
+	memset(mqtt_events[2].regex, 0x00, sizeof(mqtt_events[2].regex));
+	//EVT_MQTT_CALLING
+	strcpy(mqtt_events[0].regex, mqtt_topic_peerid_calling);
+	//EVT_MQTT_STATUS
+	strcpy(mqtt_events[1].regex, mqtt_topic_peerid_status);
+	//EVT_MQTT_SMS
+	strcpy(mqtt_events[2].regex, mqtt_topic_peerid_sms);
+
+	memset(mosquitto_addr_str, 0x00, sizeof(mosquitto_addr_str));
+
+	sprintf(mosquitto_addr_str, "tcp://%s", mosquitto_srv);
+
+	printf("CLD MQTT log srv=%s\n", mosquitto_addr_str);
+
+	MQTTAsync_create(&client, mosquitto_addr_str, mosquitto_client_topic, MQTTCLIENT_PERSISTENCE_NONE, NULL);
 
 	MQTTAsync_setCallbacks(client, NULL, connlost, msgarrvd, NULL);
 
@@ -1166,7 +1217,7 @@ void state_init(struct evt *evt)
 				end = strstr(start+1, "\"");
 			}
 			memcpy(phone, start+1, end - (start+1));
-			mqtt_pub(TOPIC_ALICE_CALLED, phone, strlen(phone), 0);
+			mqtt_pub(mqtt_topic_clientid_called, phone, strlen(phone), 0);
 			usleep(1200000); /* wait mqtt pub number finished */
 			sip_make_call(siproxy.sip_peer);
 			siproxy.sip_state = STATE_CALLING;
@@ -1255,7 +1306,7 @@ void state_incoming(struct evt *evt)
 			siproxy.modem_state = STATE_CONFIRMED;
 			
 			/* XXX: pub modem Ok */
-			mqtt_pub(TOPIC_ALICE_MODEM, MODEM_CALL_OK, 
+			mqtt_pub(mqtt_topic_clientid_modem_status, MODEM_CALL_OK, 
 				 strlen(MODEM_CALL_OK), 0);
 
 			siproxy.state = STATE_CONFIRMED;
@@ -1769,7 +1820,7 @@ void state(struct evt *evt)
 			gettimeofday(&tv, NULL);
 			strftime(uuid, NELEMS(uuid), "%Y-%m-%dT%H:%M:%S", 
 				 localtime(&tv.tv_sec));
-			snprintf(sms_topic, NELEMS(sms_topic), TOPIC_SMS"/%s", uuid);
+			snprintf(sms_topic, NELEMS(sms_topic), "%s/%s", mqtt_topic_clientid_sms, uuid);
 			mqtt_pub(sms_topic, evt->val, strlen(evt->val), 1);
 			return;
 			break;
@@ -1819,24 +1870,58 @@ int main(int argc, char **argv)
 	int sock;
 	int uart;
 	int rc;
+	int ret;
+	int loop;
 	struct sockaddr_in addr;
 	struct pollfd pfd[2];
 	struct addrinfo *ai;
 	struct addrinfo hints;
 	unsigned char buf[4096] = {0};
 
+	char *pjsua_argv[]= {"pjsua-mipsel-openwrt-linux-gnu","--config-file","/siproxy_etc/pjsip_config.dat",0};
+
 	/* check usage */
-	if (argc != 5) {
-		fprintf(stderr, "Usage:\n ./siproxy <host> <port> <sip_peer> <uart>\n");
+	if (argc != 1) {
+		fprintf(stderr, "Usage:\n ./siproxy>\n");
 		return -1;
 	}
 
+	//to do:
+	for(loop=0; loop<10; loop++)
+	{
+		ret = http_param_confirm_proc("chenlide", "arychennow");
+		if(ret == 0)
+		{
+			fprintf(stderr, "Successful to confirm user/passwd confirm and generate config file.\n");
+			break;
+		}
+
+		if(loop==3)
+		{
+			fprintf(stderr, "Failed to confirm user/passwd confirm and generate config file. %d\n", ret);
+			return -9;
+		}
+	}
+
+	/* check internet available */
+	/* to do */
+
+	/* start pjsua with config file */
+	if(fork()==0)
+	{
+		//setpgrp();
+		fprintf(stderr, "Start PJSUA Dameon process.\n");
+		fprintf(stderr, "execvp=%d    errno=%d\n", execvp("pjsua-mipsel-openwrt-linux-gnu", pjsua_argv), errno);
+	}
+
+	usleep(5000000);
+	
 	/* look up server host */
 	memset(&hints, 0, sizeof(hints));
 	hints.ai_family = AF_UNSPEC;
 	hints.ai_socktype = SOCK_STREAM;
-	if ((rs = getaddrinfo(argv[1], argv[2], &hints, &ai)) != 0) {
-		fprintf(stderr, "getaddrinfo() failed for %s: %s\n", argv[1],
+	if ((rs = getaddrinfo(DEVICE_PROCESS_BIND_ADDR, DEVICE_PROCESS_BIND_PORT, &hints, &ai)) != 0) {
+		fprintf(stderr, "getaddrinfo() failed for %s: %s\n", DEVICE_PROCESS_BIND_ADDR,
 				gai_strerror(rs));
 		return -1;
 	}
@@ -1856,9 +1941,23 @@ int main(int argc, char **argv)
 	}
 
 	/* connect */
-	if (connect(sock, ai->ai_addr, ai->ai_addrlen) == -1) {
-		fprintf(stderr, "connect() failed: %s\n", strerror(errno));
-		return -1;
+	//loop for trying and wait
+	for(loop=0;;loop++)
+	{
+		if (connect(sock, ai->ai_addr, ai->ai_addrlen) == -1) {
+
+			fprintf(stderr, "connect() failed: %s  retry=%d\n", strerror(errno), loop);
+			if(loop>=5)
+			{
+				return -1;
+			}
+			usleep(2000000);				
+		}
+		else
+		{
+			fprintf(stderr, "connect() successful.\n");			
+			break;
+		}
 	}
 
 	/* free address lookup info */
@@ -1876,7 +1975,7 @@ int main(int argc, char **argv)
 
 	/* initialize serial port for modem control */
 	int bdrate = 115200;
-	if ((uart = rs232_open(argv[4], bdrate, 0, 8, 1, 'N')) == -1) {
+	if ((uart = rs232_open(DEVICE_UART_TO_MODEM, bdrate, 0, 8, 1, 'N')) == -1) {
 		fprintf(stderr, "rs232 open failed: %s\n", strerror(errno));
 		return -1;
 	}
@@ -1911,8 +2010,13 @@ int main(int argc, char **argv)
 
 	siproxy.uart_fd = uart;
 	siproxy.sock_fd = sock;
-	snprintf(siproxy.sip_peer, sizeof(siproxy.sip_peer), "%s", argv[3]);
-	snprintf(siproxy.uart, sizeof(siproxy.uart), "%s", argv[4]);
+	snprintf(siproxy.sip_peer, sizeof(siproxy.sip_peer), "%s", sip_peer_account_str);
+	snprintf(siproxy.uart, sizeof(siproxy.uart), "%s", DEVICE_UART_TO_MODEM);
+
+
+	//test sms
+	//modem_send_sms(siproxy.uart_fd, "0891683108200105F0110005910110F00008AA06003100300031", 17);
+
 
 	/* initialize MQTT client */
 	mqtt_init();

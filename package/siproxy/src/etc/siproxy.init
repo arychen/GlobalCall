@@ -1,0 +1,13 @@
+#!/bin/sh /etc/rc.common
+
+START=86
+USE_PROCD=1
+QUIET=""
+
+
+boot() {
+	# Be silent on boot, create the directory and mount the ramfs
+	QUIET=-q
+	mkdir /siproxy_etc
+	mount -t ramfs none /siproxy_etc -o maxsize=2
+} 

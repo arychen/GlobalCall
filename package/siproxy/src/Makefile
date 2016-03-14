@@ -1,4 +1,4 @@
-SRCS := main.c rs232.c telnet.c match.c queue.c
+SRCS := main.c rs232.c telnet.c match.c queue.c http_util.c cJSON.c config.c
 PROG := siproxy
 #CC   := ~/openwrt/SWT/baseline1/staging_dir/toolchain-mipsel_24kec+dsp_gcc-4.8-linaro_uClibc-0.9.33.2/bin/mipsel-openwrt-linux-gcc
 CURDIR := $(shell pwd)
@@ -10,7 +10,7 @@ LIBINCLUDE = $(CURDIR)/paho-c/src/
 LIBPATHS = $(patsubst %,$(LIBPATH)/lib%.so, $(LIBS))
 
 CFLAGS := -g -O0 -Wall -I$(LIBINCLUDE)
-LDFLAGS:= -lrt -lpthread
+LDFLAGS:= -lrt -lpthread -lm
 OBJS   := $(SRCS:.c=.o)
 
 
